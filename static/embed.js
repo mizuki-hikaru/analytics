@@ -1,8 +1,29 @@
-let pageviewToken = null;
-const pageviewEndpoint = 'https://modestanalytics.com/pageview';
-const heartbeatEndpoint = 'https://modestanalytics.com/heartbeat';
-const deletePageviewEndpoint = 'https://modestanalytics.com/pageview/delete';
-function installAnalyticsSquare() {
+const ANALYTICS_PAGEVIEW_ENDPOINT = 'https://modestanalytics.com/pageview';
+const ANALYTICS_HEARTBEAT_ENDPOINT = 'https://modestanalytics.com/heartbeat';
+const ANALYTICS_DELETE_PAGEVIEW_ENDPOINT = 'https://modestanalytics.com/pageview/delete';
+
+let analyticsSessionId = null;
+let analyticsTimeSpentOnPage = 0;
+let analyticsLastActivityTime = Date.now();
+const analyticsInitialReferrer = document.referrer || ''; // Record initial referrer, default to empty string
+
+function analyticsIsOptOut() {
+  return localStorage.getItem('analyticsOptOut') === "true";
+}
+
+function analyticsPathWithQuery(loc) {
+  try {
+    return (loc.pathname || '/') + (loc.search || '');
+  } catch (_) {
+    return '/';
+  }
+}
+
+function analyticsUpdateActivityTime() {
+  analyticsLastActivityTime = Date.now();
+}
+
+function analyticsInstallAnalyticsSquare() {
   if (!document.getElementById('analyticsSquare')) {
     const square = document.createElement('div');
     square.id = 'analyticsSquare';
@@ -10,123 +31,130 @@ function installAnalyticsSquare() {
     document.body.appendChild(square);
   }
 }
-async function deletePageview() {
-  if (!pageviewToken) return;
+
+async function analyticsDeletePageview() {
+  if (!analyticsSessionId) return;
   try {
-    await fetch(deletePageviewEndpoint, {
+    await fetch(ANALYTICS_DELETE_PAGEVIEW_ENDPOINT, {
       method: 'POST',
-      body: new URLSearchParams({ token: pageviewToken }),
+      body: new URLSearchParams({ session_id: analyticsSessionId }),
       keepalive: true,
     });
   } catch (_) {}
 }
+
 function analyticsOptOut() {
   localStorage.setItem('analyticsOptOut', 'true');
-  installAnalyticsSquare();
-  deletePageview();
+  analyticsInstallAnalyticsSquare();
+  analyticsDeletePageview();
   alert('Analytics opt-out set for this site.');
 }
-(async function () {
+
+function analyticsGetScriptEl() {
+  let scriptEl = document.currentScript;
+  if (!scriptEl) {
+    const scripts = document.getElementsByTagName('script');
+    for (let i = scripts.length - 1; i >= 0; i--) {
+      if (scripts[i].src && /^https:\/\/modestanalytics.com\/embed\.js(\?.*)?$/.test(scripts[i].src)) {
+        scriptEl = scripts[i];
+        break;
+      }
+    }
+  }
+  return scriptEl;
+}
+
+async function analyticsInitializePageview(userToken, domain, path, initialReferrer) {
+  let pageviewToken = null;
+  let sessionId = null;
+  const params = new URLSearchParams();
+  params.append('token', userToken);
+  params.append('domain', domain);
+  params.append('path', path);
+  params.append('referrer', initialReferrer);
+  if (analyticsSessionId) {
+    params.append("session_id", analyticsSessionId);
+  }
+
   try {
-    function isOptOut() {
-      return localStorage.getItem('analyticsOptOut') === "true";
-    }
-    if (isOptOut()) {
-      document.addEventListener('DOMContentLoaded', function () {
-        installAnalyticsSquare();
-      });
-      return;
-    }
-    let scriptEl = document.currentScript;
-    if (!scriptEl) {
-      const scripts = document.getElementsByTagName('script');
-      for (let i = scripts.length - 1; i >= 0; i--) {
-        if (scripts[i].src && /^https:\/\/modestanalytics.com\/embed\.js(\?.*)?$/.test(scripts[i].src)) {
-          scriptEl = scripts[i];
-          break;
-        }
-      }
-    }
-    if (!scriptEl) return;
+    const response = await fetch(ANALYTICS_PAGEVIEW_ENDPOINT, {
+      method: 'POST',
+      body: params,
+      keepalive: true,
+    });
+    const data = await response.json();
+    pageviewToken = data.token;
+    sessionId = data.session_id;
+  } catch (_) {}
+  return [pageviewToken, sessionId];
+}
 
-    const userToken = scriptEl.dataset.token || '';
-    if (!pageviewEndpoint || !heartbeatEndpoint || !userToken) return;
+function analyticsHeartbeat(pageviewToken) {
+  if (!pageviewToken) return;
+  if (analyticsIsOptOut()) {
+    analyticsInstallAnalyticsSquare();
+    return;
+  }
 
-    function pathWithQuery(loc) {
-      try {
-        return (loc.pathname || '/') + (loc.search || '');
-      } catch (_) {
-        return '/';
-      }
-    }
+  if (analyticsLastActivityTime > Date.now() - 30000) {
+    analyticsTimeSpentOnPage += 4;
+  }
 
-    const startTime = Date.now(); // Record start time when script loads
-    const initialReferrer = document.referrer || ''; // Record initial referrer, default to empty string
-    let timeSpentOnPage = 0;
-    let lastActivityTime = Date.now(); // Initialize last activity time
+  const params = new URLSearchParams();
+  params.append('token', pageviewToken);
+  params.append('time_spent_on_page', analyticsTimeSpentOnPage);
 
-    // Update lastActivityTime on user interaction
-    function updateActivityTime() {
-      lastActivityTime = Date.now();
-    }
-
-    document.addEventListener('mousemove', updateActivityTime);
-    document.addEventListener('keydown', updateActivityTime);
-    document.addEventListener('scroll', updateActivityTime);
-
-    const loc = window.location || {};
-    const domain = loc.hostname;
-    const path = pathWithQuery(loc);
-
-    if (!domain) return;
-
-    const params = new URLSearchParams();
-    params.append('token', userToken);
-    params.append('domain', domain);
-    params.append('path', path);
-    params.append('referrer', initialReferrer);
-
+  // Try to use sendBeacon first
+  if (navigator.sendBeacon && navigator.sendBeacon(ANALYTICS_HEARTBEAT_ENDPOINT, params)) {
+    // Data successfully queued by sendBeacon
+  } else {
+    // sendBeacon not available or failed, use fetch as fallback
     try {
-      const response = await fetch(pageviewEndpoint, {
+      fetch(ANALYTICS_HEARTBEAT_ENDPOINT, {
         method: 'POST',
         body: params,
         keepalive: true,
+      }).catch(function () {});
+    } catch (e) {
+      // Fallback for older browsers that might not support fetch or sendBeacon
+    }
+  }
+}
+
+(async function () {
+  try {
+    if (analyticsIsOptOut()) {
+      document.addEventListener('DOMContentLoaded', function () {
+        analyticsInstallAnalyticsSquare();
       });
-      const data = await response.json();
-      pageviewToken = data.token || '';
-    } catch (_) {}
-
-    function heartbeat() {
-      if (!pageviewToken) return;
-      if (isOptOut()) return;
-
-      if (lastActivityTime > Date.now() - 30000) {
-        timeSpentOnPage += 4;
-      }
-
-      const params = new URLSearchParams();
-      params.append('token', pageviewToken);
-      params.append('time_spent_on_page', timeSpentOnPage);
-
-      // Try to use sendBeacon first
-      if (navigator.sendBeacon && navigator.sendBeacon(heartbeatEndpoint, params)) {
-        // Data successfully queued by sendBeacon
-      } else {
-        // sendBeacon not available or failed, use fetch as fallback
-        try {
-          fetch(heartbeatEndpoint, {
-            method: 'POST',
-            body: params,
-            keepalive: true,
-          }).catch(function () {});
-        } catch (e) {
-          // Fallback for older browsers that might not support fetch or sendBeacon
-        }
-      }
+      return;
     }
 
+    const scriptEl = analyticsGetScriptEl();
+    if (!scriptEl) return;
+
+    const userToken = scriptEl.dataset.token || '';
+    if (!userToken) return;
+
+    document.addEventListener('mousemove', analyticsUpdateActivityTime);
+    document.addEventListener('keydown', analyticsUpdateActivityTime);
+    document.addEventListener('scroll', analyticsUpdateActivityTime);
+
+    const loc = window.location || {};
+    const domain = loc.hostname;
+    const path = analyticsPathWithQuery(loc);
+
+    if (!domain) return;
+
+    analyticsSessionId = localStorage.getItem('analyticsSessionId');
+
+    let [pageviewToken, sessionId] = await analyticsInitializePageview(userToken, domain, path, analyticsInitialReferrer);
+
+    localStorage.setItem('analyticsSessionId', sessionId);
+    analyticsSessionId = sessionId;
+
     // calculate and send heartbeat data every 4 seconds
-    setInterval(heartbeat, 4000);
+    setInterval(() => analyticsHeartbeat(pageviewToken), 4000);
 
   } catch (_) {}
 })();

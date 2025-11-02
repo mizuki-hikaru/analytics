@@ -171,6 +171,7 @@ async def pageview(
     domain: Annotated[str, Form()],
     path: Annotated[str, Form()],
     referrer: Annotated[str, Form()],
+    session_id: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_db),
 ):
     user = db.query(User).filter(User.token == token).first()
@@ -179,6 +180,8 @@ async def pageview(
     if not domain or not path:
         raise HTTPException(status_code=400, detail="Domain and path are required.")
     pageview_token = secrets.token_urlsafe(16)
+    if not session_id:
+        session_id = secrets.token_urlsafe(16)
     pv = Pageview(
         user_id=user.id,
         domain=domain.strip()[:255],
@@ -186,20 +189,21 @@ async def pageview(
         referrer=referrer.strip()[:1024],
         time_spent_on_page=0,
         token=pageview_token,
+        session_id=session_id,
     )
     db.add(pv)
     db.commit()
-    return {"token": pageview_token}
+    return {"token": pageview_token, "session_id": session_id}
 
 @app.post("/pageview/delete")
 async def delete_pageview(
-    token: Annotated[str, Form()],
+    session_id: Annotated[str, Form()],
     db: Session = Depends(get_db),
 ):
-    pv = db.query(Pageview).filter(Pageview.token == token).first()
-    if not pv:
-        raise HTTPException(status_code=404, detail="Pageview not found.")
-    db.delete(pv)
+    pvs = db.query(Pageview).filter(Pageview.session_id == session_id)
+    if not pvs.first():
+        raise HTTPException(status_code=404, detail="No pageviews found for this session.")
+    pvs.delete()
     db.commit()
     return {"status": "ok"}
 
