@@ -1,11 +1,15 @@
 const ANALYTICS_PAGEVIEW_ENDPOINT = 'https://modestanalytics.com/pageview';
 const ANALYTICS_HEARTBEAT_ENDPOINT = 'https://modestanalytics.com/heartbeat';
 const ANALYTICS_DELETE_PAGEVIEW_ENDPOINT = 'https://modestanalytics.com/pageview/delete';
+const ANALYTICS_IDLE_THRESHOLD_MS     = 30000;   // after 30s without input, pause
+const ANALYTICS_HEARTBEAT_INTERVAL_MS = 4000;
 
-let analyticsSessionId = null;
+// --- State ---
+let analyticsEngaged = false;
+let analyticsLastTick = performance.now();
+let analyticsAccumulatedMs = 0;
+let analyticsIdleTimer = null;
 let analyticsTimeSpentOnPage = 0;
-let analyticsLastActivityTime = Date.now();
-const analyticsInitialReferrer = document.referrer || ''; // Record initial referrer, default to empty string
 
 function analyticsIsOptOut() {
   return localStorage.getItem('analyticsOptOut') === "true";
@@ -19,10 +23,6 @@ function analyticsPathWithQuery(loc) {
   }
 }
 
-function analyticsUpdateActivityTime() {
-  analyticsLastActivityTime = Date.now();
-}
-
 function analyticsInstallAnalyticsSquare() {
   if (!document.getElementById('analyticsSquare')) {
     const square = document.createElement('div');
@@ -33,11 +33,12 @@ function analyticsInstallAnalyticsSquare() {
 }
 
 async function analyticsDeletePageview() {
-  if (!analyticsSessionId) return;
+  const sessionId = localStorage.getItem('analyticsSessionId');
+  if (!sessionId) return;
   try {
     await fetch(ANALYTICS_DELETE_PAGEVIEW_ENDPOINT, {
       method: 'POST',
-      body: new URLSearchParams({ session_id: analyticsSessionId }),
+      body: new URLSearchParams({ session_id: sessionId }),
       keepalive: true,
     });
   } catch (_) {}
@@ -66,14 +67,15 @@ function analyticsGetScriptEl() {
 
 async function analyticsInitializePageview(userToken, domain, path, initialReferrer) {
   let pageviewToken = null;
-  let sessionId = null;
+  let sessionId = localStorage.getItem('analyticsSessionId');
+
   const params = new URLSearchParams();
   params.append('token', userToken);
   params.append('domain', domain);
   params.append('path', path);
   params.append('referrer', initialReferrer);
-  if (analyticsSessionId) {
-    params.append("session_id", analyticsSessionId);
+  if (sessionId) {
+    params.append("session_id", sessionId);
   }
 
   try {
@@ -89,25 +91,68 @@ async function analyticsInitializePageview(userToken, domain, path, initialRefer
   return [pageviewToken, sessionId];
 }
 
-function analyticsHeartbeat(pageviewToken) {
+
+function analyticsStartClock() {
+  if (analyticsEngaged) return;
+  analyticsEngaged = true;
+  analyticsLastTick = performance.now();
+  analyticsScheduleIdleCheck();
+}
+
+function analyticsStopClock() {
+  if (!analyticsEngaged) return;
+  analyticsAccumulatedMs += performance.now() - analyticsLastTick;
+  analyticsEngaged = false;
+  analyticsClearIdleCheck();
+}
+
+function analyticsScheduleIdleCheck() {
+  analyticsClearIdleCheck();
+  analyticsIdleTimer = setTimeout(() => {
+    // user idle -> pause
+    analyticsStopClock();
+  }, ANALYTICS_IDLE_THRESHOLD_MS);
+}
+
+function analyticsClearIdleCheck() {
+  if (analyticsIdleTimer) { clearTimeout(analyticsIdleTimer); analyticsIdleTimer = null; }
+}
+
+function analyticsUserActivity() {
+  // any input resets idle timer and ensures running if visible
+  if (!document.hidden) {
+    if (!analyticsEngaged) analyticsStartClock();
+    else analyticsScheduleIdleCheck();
+  }
+}
+
+function analyticsTickVisibility(pageviewToken) {
+  if (document.hidden) {
+    analyticsStopClock();
+    analyticsFlush(pageviewToken);
+  } else {
+    analyticsStartClock();
+  }
+}
+
+function analyticsFlush(pageviewToken) {
   if (!pageviewToken) return;
   if (analyticsIsOptOut()) {
     analyticsInstallAnalyticsSquare();
     return;
   }
+  const ms = Math.round(analyticsAccumulatedMs);
+  if (ms <= 0) return;
+  analyticsAccumulatedMs = 0;
 
-  if (analyticsLastActivityTime > Date.now() - 30000) {
-    analyticsTimeSpentOnPage += 4;
-  }
+  analyticsTimeSpentOnPage += Math.round(ms/1000);
 
   const params = new URLSearchParams();
   params.append('token', pageviewToken);
   params.append('time_spent_on_page', analyticsTimeSpentOnPage);
 
   // Try to use sendBeacon first
-  if (navigator.sendBeacon && navigator.sendBeacon(ANALYTICS_HEARTBEAT_ENDPOINT, params)) {
-    // Data successfully queued by sendBeacon
-  } else {
+  if (!(navigator.sendBeacon && navigator.sendBeacon(ANALYTICS_HEARTBEAT_ENDPOINT, params))) {
     // sendBeacon not available or failed, use fetch as fallback
     try {
       fetch(ANALYTICS_HEARTBEAT_ENDPOINT, {
@@ -119,6 +164,24 @@ function analyticsHeartbeat(pageviewToken) {
       // Fallback for older browsers that might not support fetch or sendBeacon
     }
   }
+}
+
+function analyticsHeartbeat(pageviewToken) {
+  if (analyticsEngaged) {
+    // capture up-to-this-moment time without stopping the clock
+    const t = performance.now();
+    const delta = t - analyticsLastTick;
+    analyticsAccumulatedMs += delta;
+    analyticsLastTick = t;
+  }
+  if (analyticsAccumulatedMs > 0) {
+    analyticsFlush(pageviewToken);
+  }
+}
+
+function analyticsOnPagehide(pageviewToken) {
+  analyticsStopClock();
+  analyticsFlush(pageviewToken);
 }
 
 (async function () {
@@ -136,25 +199,59 @@ function analyticsHeartbeat(pageviewToken) {
     const userToken = scriptEl.dataset.token || '';
     if (!userToken) return;
 
-    document.addEventListener('mousemove', analyticsUpdateActivityTime);
-    document.addEventListener('keydown', analyticsUpdateActivityTime);
-    document.addEventListener('scroll', analyticsUpdateActivityTime);
-
+    const analyticsInitialReferrer = document.referrer;
     const loc = window.location || {};
     const domain = loc.hostname;
     const path = analyticsPathWithQuery(loc);
 
     if (!domain) return;
 
-    analyticsSessionId = localStorage.getItem('analyticsSessionId');
-
     let [pageviewToken, sessionId] = await analyticsInitializePageview(userToken, domain, path, analyticsInitialReferrer);
 
     localStorage.setItem('analyticsSessionId', sessionId);
-    analyticsSessionId = sessionId;
+
+    // --- Wire up events ---
+    // Start if visible on load
+    if (!document.hidden) analyticsStartClock();
+
+    // User activity signals (reset idle + start if needed)
+    ["pointerdown","mousemove","pointermove","keydown","wheel","touchstart","scroll"].forEach(evt =>
+      window.addEventListener(evt, analyticsUserActivity, { passive: true })
+    );
+
+    // Visibility / lifecycle
+    document.addEventListener("visibilitychange", () => analyticsTickVisibility(pageviewToken));
+    window.addEventListener("focus", () => { if (!document.hidden) analyticsStartClock(); });
+
+    // Page being put into bfcache or closed
+    window.addEventListener("pagehide", () => analyticsOnPagehide(pageviewToken));
+    // Safari sometimes only fires beforeunload reliably
+    window.addEventListener("beforeunload", () => { analyticsStopClock(); analyticsFlush(pageviewToken); });
 
     // calculate and send heartbeat data every 4 seconds
-    setInterval(() => analyticsHeartbeat(pageviewToken), 4000);
+    setInterval(analyticsHeartbeat, ANALYTICS_HEARTBEAT_INTERVAL_MS, pageviewToken);
 
+    // --- SPA support (optional but recommended) ---
+    // If you use a router, call window.__trackRouteChange() manually on each route change.
+    // The code below auto-instruments pushState/replaceState/popstate for vanilla SPAs.
+    (function instrumentHistory() {
+      function routeChanged() {
+        analyticsStopClock();
+        analyticsFlush(pageviewToken);
+        analyticsTickVisibility(pageviewToken);
+      }
+      const wrap = (fnName) => {
+        const orig = history[fnName];
+        history[fnName] = function () {
+          const rv = orig.apply(this, arguments);
+          routeChanged();
+          return rv;
+        };
+      };
+      wrap("pushState");
+      wrap("replaceState");
+      window.addEventListener("popstate", () => routeChanged());
+      window.__trackRouteChange = () => routeChanged();
+    })();
   } catch (_) {}
 })();
