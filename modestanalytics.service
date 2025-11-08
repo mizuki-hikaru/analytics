@@ -4,6 +4,8 @@ Description=Modest Analytics
 [Service]
 ExecStart=%h/modestanalytics/env/bin/uvicorn server:app --reload --port 8001
 WorkingDirectory=%h/modestanalytics
+StandardOutput=append:%h/modestanalytics/stdout.log
+StandardError=append:%h/modestanalytics/stderr.log
 Restart=on-failure
 
 [Install]
