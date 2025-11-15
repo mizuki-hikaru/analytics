@@ -257,9 +257,10 @@ def build_digest(db: Session, user: User) -> tuple[str, str]:
         key = (d or "", p or "")
         counts[key] = counts.get(key, 0) + 1
 
-        if key not in referrer_per_page:
-            referrer_per_page[key] = {}
-        referrer_per_page[key][r] = referrer_per_page[key].get(r, 0) + 1
+        if r:
+            if key not in referrer_per_page:
+                referrer_per_page[key] = {}
+            referrer_per_page[key][r] = referrer_per_page[key].get(r, 0) + 1
 
         if key not in time_spent_on_page_totals:
             time_spent_on_page_totals[key] = []
