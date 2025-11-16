@@ -88,7 +88,6 @@ async function analyticsInitializePageview(userToken, domain, path, initialRefer
   params.append('token', userToken);
   params.append('domain', domain);
   params.append('path', path);
-  params.append('is_bot', analyticsIsBot());
   params.append('referrer', initialReferrer);
   if (sessionId) {
     params.append("session_id", sessionId);
@@ -157,6 +156,7 @@ function analyticsFlush(pageviewToken) {
     analyticsInstallAnalyticsSquare();
     return;
   }
+  if (analyticsIsBot()) return;
   const ms = Math.round(analyticsAccumulatedMs);
   if (ms <= 0) return;
   analyticsAccumulatedMs = 0;
@@ -208,6 +208,7 @@ function analyticsOnPagehide(pageviewToken) {
       });
       return;
     }
+    if (analyticsIsBot()) return;
 
     const scriptEl = analyticsGetScriptEl();
     if (!scriptEl) return;
