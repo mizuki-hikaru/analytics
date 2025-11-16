@@ -171,6 +171,7 @@ async def pageview(
     domain: Annotated[str, Form()],
     path: Annotated[str, Form()],
     referrer: Annotated[str, Form()],
+    is_bot: Annotated[bool, Form()],
     session_id: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_db),
 ):
@@ -190,6 +191,7 @@ async def pageview(
         time_spent_on_page=0,
         token=pageview_token,
         session_id=session_id,
+        is_bot=is_bot,
     )
     db.add(pv)
     db.commit()

@@ -51,6 +51,21 @@ function analyticsOptOut() {
   alert('Analytics opt-out set for this site.');
 }
 
+function analyticsIsBot() {
+  var nav = window.navigator || {};
+  var ua = (nav.userAgent || "").toLowerCase();
+  return !!(
+    ua.includes("bot") ||
+    ua.includes("crawl") ||
+    ua.includes("crawler") ||
+    ua.includes("spider") ||
+    ua.includes("headless") ||
+    ua.includes("uptime") ||
+    ua.includes("monitor") ||
+    nav.webdriver
+  );
+}
+
 function analyticsGetScriptEl() {
   let scriptEl = document.currentScript;
   if (!scriptEl) {
@@ -73,6 +88,7 @@ async function analyticsInitializePageview(userToken, domain, path, initialRefer
   params.append('token', userToken);
   params.append('domain', domain);
   params.append('path', path);
+  params.append('is_bot', analyticsIsBot());
   params.append('referrer', initialReferrer);
   if (sessionId) {
     params.append("session_id", sessionId);

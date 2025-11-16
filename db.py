@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    create_engine, Column, Integer, String, DateTime, ForeignKey
+    create_engine, Column, Integer, String, DateTime, ForeignKey, Boolean
 )
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship, Session
 
@@ -39,6 +39,7 @@ class Pageview(Base):
     path = Column(String, nullable=False)
     referrer = Column(String, nullable=False)
     time_spent_on_page = Column(Integer, nullable=False)
+    is_bot = Column(Boolean, nullable=False)
 
     user = relationship("User", back_populates="pageviews")
 
