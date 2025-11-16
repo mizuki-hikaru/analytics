@@ -244,6 +244,7 @@ def build_digest(db: Session, user: User) -> tuple[str, str]:
             Pageview.user_id == user.id,
             Pageview.timestamp >= start,
             Pageview.timestamp < now,
+            Pageview.is_bot == False,
         )
         .all()
     )
