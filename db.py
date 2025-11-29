@@ -37,7 +37,6 @@ class Pageview(Base):
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     domain = Column(String, nullable=False)
     path = Column(String, nullable=False)
-    referrer = Column(String, nullable=False)
     time_spent_on_page = Column(Integer, nullable=False)
 
     user = relationship("User", back_populates="pageviews")

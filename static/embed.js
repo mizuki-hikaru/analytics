@@ -80,7 +80,7 @@ function analyticsGetScriptEl() {
   return scriptEl;
 }
 
-async function analyticsInitializePageview(userToken, domain, path, initialReferrer) {
+async function analyticsInitializePageview(userToken, domain, path) {
   let pageviewToken = null;
   let sessionId = localStorage.getItem('analyticsSessionId');
 
@@ -88,7 +88,6 @@ async function analyticsInitializePageview(userToken, domain, path, initialRefer
   params.append('token', userToken);
   params.append('domain', domain);
   params.append('path', path);
-  params.append('referrer', initialReferrer);
   if (sessionId) {
     params.append("session_id", sessionId);
   }
@@ -216,14 +215,13 @@ function analyticsOnPagehide(pageviewToken) {
     const userToken = scriptEl.dataset.token || '';
     if (!userToken) return;
 
-    const analyticsInitialReferrer = document.referrer;
     const loc = window.location || {};
     const domain = loc.hostname;
     const path = analyticsPathWithQuery(loc);
 
     if (!domain) return;
 
-    let [pageviewToken, sessionId] = await analyticsInitializePageview(userToken, domain, path, analyticsInitialReferrer);
+    let [pageviewToken, sessionId] = await analyticsInitializePageview(userToken, domain, path);
 
     localStorage.setItem('analyticsSessionId', sessionId);
 

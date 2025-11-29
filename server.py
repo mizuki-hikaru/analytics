@@ -170,7 +170,6 @@ async def pageview(
     token: Annotated[str, Form()],
     domain: Annotated[str, Form()],
     path: Annotated[str, Form()],
-    referrer: Annotated[str, Form()],
     session_id: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_db),
 ):
@@ -186,7 +185,6 @@ async def pageview(
         user_id=user.id,
         domain=domain.strip()[:255],
         path=path.strip()[:512],
-        referrer=referrer.strip()[:1024],
         time_spent_on_page=0,
         token=pageview_token,
         session_id=session_id,
@@ -237,7 +235,7 @@ def build_digest(db: Session, user: User) -> tuple[str, str]:
     start = now - timedelta(days=7)
 
     rows = (
-        db.query(Pageview.domain, Pageview.path, Pageview.referrer, Pageview.time_spent_on_page)
+        db.query(Pageview.domain, Pageview.path, Pageview.time_spent_on_page)
         .filter(
             Pageview.user_id == user.id,
             Pageview.timestamp >= start,
@@ -250,17 +248,11 @@ def build_digest(db: Session, user: User) -> tuple[str, str]:
 
     # Aggregate per (domain, path)
     counts: dict[tuple[str, str], int] = {}
-    referrer_per_page: dict[tuple[str, str], dict[str, int]] = {}
     time_spent_on_page_totals: dict[tuple[str, str], list[int]] = {}
 
-    for d, p, r, t in rows:
+    for d, p, t in rows:
         key = (d or "", p or "")
         counts[key] = counts.get(key, 0) + 1
-
-        if r:
-            if key not in referrer_per_page:
-                referrer_per_page[key] = {}
-            referrer_per_page[key][r] = referrer_per_page[key].get(r, 0) + 1
 
         if key not in time_spent_on_page_totals:
             time_spent_on_page_totals[key] = []
@@ -269,11 +261,6 @@ def build_digest(db: Session, user: User) -> tuple[str, str]:
     period_str = f"{start.strftime('%Y-%m-%d')} → {now.strftime('%Y-%m-%d')} ({local_tz})"
 
     sorted_results = sorted(counts.items(), key=lambda x: (-x[1], x[0]))
-
-    # Calculate top referrer per (domain, path)
-    top_referrer_per_page: dict[tuple[str, str], str] = {}
-    for key, referrers in referrer_per_page.items():
-        top_referrer_per_page[key] = max(referrers, key=referrers.get)
 
     # Calculate average time spent on page per (domain, path)
     average_time_spent_on_page: dict[tuple[str, str], int] = {}
@@ -290,13 +277,12 @@ def build_digest(db: Session, user: User) -> tuple[str, str]:
     ]
     for (d, p), c in sorted_results:
         avg_time = average_time_spent_on_page.get((d, p), 0)
-        top_ref = top_referrer_per_page.get((d, p), "N/A")
-        lines.append(f"- {d}{p} — {c} views, avg time: {avg_time:.1f}s, top referrer: {top_ref}")
+        lines.append(f"- {d}{p} — {c} views, avg time: {avg_time:.1f}s")
     text = "\n".join(lines)
 
     # HTML version
     html_rows = "".join(
-        f"<tr><td>{escape(d)}{escape(p)}</td><td style='text-align:right'>{c}</td><td style='text-align:right'>{average_time_spent_on_page.get((d, p), 0):.1f}s</td><td>{escape(top_referrer_per_page.get((d, p), "N/A"))}</td></tr>"
+        f"<tr><td>{escape(d)}{escape(p)}</td><td style='text-align:right'>{c}</td><td style='text-align:right'>{average_time_spent_on_page.get((d, p), 0):.1f}s</td></tr>"
         for (d, p), c in sorted_results
     )
     if not html_rows:
@@ -307,7 +293,7 @@ def build_digest(db: Session, user: User) -> tuple[str, str]:
     <p><strong>Period:</strong> {period_str}</p>
     <p><strong>Total pageviews (last 7 days):</strong> {total}</p>
     <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse">
-      <thead><tr><th>URL</th><th>Views</th><th>Avg. Time</th><th>Top Referrer</th></tr></thead>
+      <thead><tr><th>URL</th><th>Views</th><th>Avg. Time</th></tr></thead>
       <tbody>{html_rows}</tbody>
     </table>
     """
