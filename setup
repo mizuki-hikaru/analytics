@@ -8,7 +8,11 @@ python3 -m venv env
 pip install --require-hashes -r requirements.txt
 
 mkdir -p ~/.config/systemd/user
-cp "$SERVICE_NAME" ~/.config/systemd/user/
+
+read -p "Enter the port for the service [2000]: " PORT
+PORT=${PORT:-2000}
+
+sed "s/PORT/$PORT/g" "$SERVICE_NAME" > ~/.config/systemd/user/"$SERVICE_NAME"
 systemctl --user daemon-reload
 systemctl --user enable --now "$SERVICE_NAME"
 
