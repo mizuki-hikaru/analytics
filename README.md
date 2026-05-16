@@ -6,10 +6,6 @@ Hikaru Analytics is a lightweight, privacy-focused analytics tool built with Fas
 
 This code assumes you are running the service in ~/analytics.
 
-Run this:
-
-    sudo loginctl enable-linger $USER
-
-Then as then run this:
+To installl the systemctl service file, run this:
 
     ./setup
