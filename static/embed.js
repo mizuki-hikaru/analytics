@@ -1,6 +1,6 @@
-const ANALYTICS_PAGEVIEW_ENDPOINT = 'https://modestanalytics.com/pageview';
-const ANALYTICS_HEARTBEAT_ENDPOINT = 'https://modestanalytics.com/heartbeat';
-const ANALYTICS_DELETE_PAGEVIEW_ENDPOINT = 'https://modestanalytics.com/pageview/delete';
+const ANALYTICS_PAGEVIEW_ENDPOINT = 'https://analytics.hikaru.org/pageview';
+const ANALYTICS_HEARTBEAT_ENDPOINT = 'https://analytics.hikaru.org/heartbeat';
+const ANALYTICS_DELETE_PAGEVIEW_ENDPOINT = 'https://analytics.hikaru.org/pageview/delete';
 const ANALYTICS_IDLE_THRESHOLD_MS     = 30000;   // after 30s without input, pause
 const ANALYTICS_HEARTBEAT_INTERVAL_MS = 4000;
 
@@ -71,7 +71,7 @@ function analyticsGetScriptEl() {
   if (!scriptEl) {
     const scripts = document.getElementsByTagName('script');
     for (let i = scripts.length - 1; i >= 0; i--) {
-      if (scripts[i].src && /^https:\/\/modestanalytics.com\/embed\.js(\?.*)?$/.test(scripts[i].src)) {
+      if (scripts[i].src && /^https:\/\/analytics\.hikaru\.org\/embed\.js(\?.*)?$/.test(scripts[i].src)) {
         scriptEl = scripts[i];
         break;
       }

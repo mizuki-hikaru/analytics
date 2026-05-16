@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
     yield
     # No explicit teardown needed; thread is daemon and will exit with process
 
-app = FastAPI(title="Modest Analytics", lifespan=lifespan)
+app = FastAPI(title="Hikaru Analytics", lifespan=lifespan)
 
 # Serve static files and allow CORS
 app.add_middleware(
@@ -133,7 +133,7 @@ async def register(req: RegisterRequest, db: Session = Depends(get_db)):
     body_html = f"<p>Your verification code is: <strong>{code}</strong></p><p>This code expires in 10 minutes.</p>"
 
     try:
-        send_email(email, "Your Modest Analytics verification code", body_text, body_html)
+        send_email(email, "Your Hikaru Analytics verification code", body_text, body_html)
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail="Failed to send verification email.")
@@ -160,7 +160,7 @@ async def verify(req: VerifyRequest, db: Session = Depends(get_db)):
     db.commit()
 
     js_snippet = (
-        '<script src="https://modestanalytics.com/embed.js" '
+        '<script src="https://analytics.hikaru.org/embed.js" '
         f'data-token="{user.token}"></script>'
     )
     return {"snippet": js_snippet}

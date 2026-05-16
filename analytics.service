@@ -1,0 +1,12 @@
+[Unit]
+Description=Hikaru Analytics
+
+[Service]
+ExecStart=%h/analytics/env/bin/uvicorn server:app --reload --port 8001
+WorkingDirectory=%h/analytics
+StandardOutput=append:%h/analytics/stdout.log
+StandardError=append:%h/analytics/stderr.log
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

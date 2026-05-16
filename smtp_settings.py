@@ -5,4 +5,4 @@ SMTP_USERNAME = "your-smtp-username"
 SMTP_PASSWORD = "your-smtp-password"
 
 # The visible From address for outgoing emails
-SMTP_FROM = "Modest Analytics <no-reply@modestanalytics.com>"
+SMTP_FROM = "Hikaru Analytics <no-reply@analytics.hikaru.org>"
