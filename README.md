@@ -8,7 +8,7 @@ This code assumes you are running the service as the `analytics` user.
 
 As `root`, run this:
 
-    sudo loginctl enable-linger 
+    sudo loginctl enable-linger analytics
 
 Then as the `analytics` user, run this:
 
