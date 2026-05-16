@@ -4,12 +4,12 @@ Hikaru Analytics is a lightweight, privacy-focused analytics tool built with Fas
 
 ## Deploying
 
-This code assumes you are running the service as the `analytics` user.
+This code assumes you are running the service in ~/analytics.
 
-As `root`, run this:
+Run this:
 
-    sudo loginctl enable-linger analytics
+    sudo loginctl enable-linger $USER
 
-Then as the `analytics` user, run this:
+Then as then run this:
 
     ./setup
