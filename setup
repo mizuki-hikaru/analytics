@@ -4,7 +4,7 @@ set -euo pipefail
 SERVICE_NAME="analytics.service"
 
 python3 -m venv env
-. env /bin/activate
+. env/bin/activate
 pip install --require-hashes -r requirements.txt
 
 mkdir -p ~/.config/systemd/user
