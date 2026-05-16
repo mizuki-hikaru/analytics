@@ -3,6 +3,9 @@ set -euo pipefail
 
 SERVICE_NAME="analytics.service"
 
+echo "Requesting sudo privileges to enable linger"
+sudo loginctl enable-linger $USER
+
 python3 -m venv env
 . env/bin/activate
 pip install --require-hashes -r requirements.txt
