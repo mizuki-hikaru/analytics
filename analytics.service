@@ -2,7 +2,7 @@
 Description=Hikaru Analytics
 
 [Service]
-ExecStart=%h/analytics/env/bin/uvicorn server:app --reload --port PORT
+ExecStart=%h/analytics/env/bin/uvicorn server:app --reload --host 0.0.0.0 --port PORT
 WorkingDirectory=%h/analytics
 StandardOutput=append:%h/analytics/stdout.log
 StandardError=append:%h/analytics/stderr.log
