@@ -7,21 +7,13 @@ WorkingDirectory=%h/analytics
 StandardOutput=append:%h/analytics/stdout.log
 StandardError=append:%h/analytics/stderr.log
 Restart=on-failure
-ReadWritePaths=$h/analytics
-ProtectSystem=strict
-ProtectHome=yes
+ReadWritePaths=%h/analytics
 PrivateTmp=yes
-PrivateDevices=yes
-RestrictAddressFamilies=
-CapabilityBoundingSet=
-SystemCallFilter=
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
 RestrictRealtime=yes
 ProtectHostname=yes
+NoNewPrivileges=yes
 
 [Install]
 WantedBy=default.target
