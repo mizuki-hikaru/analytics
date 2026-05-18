@@ -18,5 +18,6 @@ PORT=${PORT:-2000}
 sed "s/PORT/$PORT/g" "$SERVICE_NAME" > ~/.config/systemd/user/"$SERVICE_NAME"
 systemctl --user daemon-reload
 systemctl --user enable --now "$SERVICE_NAME"
+systemctl --user restart "$SERVICE_NAME"
 
 echo "Installed and started $SERVICE_NAME"
